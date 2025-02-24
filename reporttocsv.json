@@ -1,0 +1,502 @@
+[
+    {
+        "id": "62ee4ea651cd546d",
+        "type": "subflow",
+        "name": "Subflow 2",
+        "info": "",
+        "category": "",
+        "in": [],
+        "out": [
+            {
+                "x": 1160,
+                "y": 200,
+                "wires": [
+                    {
+                        "id": "f1df956a33acbc74",
+                        "port": 0
+                    }
+                ]
+            }
+        ],
+        "env": [
+            {
+                "name": "address",
+                "type": "str",
+                "value": "",
+                "ui": {
+                    "type": "input",
+                    "opts": {
+                        "types": [
+                            "str"
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "user",
+                "type": "str",
+                "value": ""
+            },
+            {
+                "name": "password",
+                "type": "cred",
+                "ui": {
+                    "type": "input",
+                    "opts": {
+                        "types": [
+                            "cred"
+                        ]
+                    }
+                }
+            }
+        ],
+        "meta": {
+            "module": "node-red-contrib-dces",
+            "type": "ReportToCSV",
+            "version": "0.1.2",
+            "author": "Jordan Jennings <jjennings@distech-controls.com>",
+            "desc": "Output csv for an email",
+            "keywords": "node-red,email,csv,distech",
+            "license": "Apache-2.0"
+        },
+        "color": "#DDAA99"
+    },
+    {
+        "id": "f1df956a33acbc74",
+        "type": "csv",
+        "z": "62ee4ea651cd546d",
+        "name": "",
+        "sep": ",",
+        "hdrin": true,
+        "hdrout": "none",
+        "multi": "one",
+        "ret": "\\r\\n",
+        "temp": "",
+        "skip": "0",
+        "strings": false,
+        "include_empty_strings": true,
+        "include_null_values": true,
+        "x": 1030,
+        "y": 200,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "abb40408b0cd0b98",
+        "type": "function",
+        "z": "62ee4ea651cd546d",
+        "name": "BuildAPICall",
+        "func": "//set up for no certificate\nmsg.rejectUnauthorized = false;\nconst address = \"\" || env.get('address');\nconst localUser = \"\" || env.get('user');\nconst localPass = \"\" || env.get('password');\nconst credentials = (localUser) + ':' + (localPass);\nconst encodedCred = Buffer.from(credentials).toString(\"base64\");\nmsg.headers = {};\nmsg.headers['authorization'] = 'basic ' + encodedCred;\nmsg.url = address + \"/designer/file/proj/test/reports\";\nmsg.url = address + \"/api/rest/v2/batch\"\n\n//url variables for api calls\nvar urlbase = \"/api/rest/v2\";\nvar type = \"/present-value\";\n\n//Info gathering from JSON and setting up variables for loop\nvar row = msg.topic.table.length;\nmsg.row = row;\nvar column = Object.keys(msg.topic.table[0]).length;\nmsg.column = column;\nvar columnAdj = column - 1;\nvar loop = columnAdj * row;\nconst requests = [];\nconst keysArray = Object.entries(msg.topic.table[0]).map(entry => entry[0]);\nlet t = 0;\nlet c = 0;\nconst names = [];\n\n//Loop creates JSON Array for API Call\nfor (let i = 1; i <= loop; i++){\n    c = c + 1;\n    if(c == column){\n        t = t + 1;\n        c = 1;        \n    };\n    var urlmid = msg.topic.table[t][keysArray[c]];\n    const getRequests = {\n        \"id\": i.toString(),\n        \"url\": urlbase + urlmid + type\n    };\n    requests.push(getRequests);\n    msg.keys = keysArray;\n}\n\n//get column names\nvar k = 0;\nfor (let j = 1; j <= row; j++){\n    names.push(msg.topic.table[k].name)\n    k = k + 1;\n}\nmsg.names = names;\n\n//Test output\nmsg.test = requests[0];\n\n//Body of api call\nmsg.payload = {\n    requests\n}\nmsg.email.to = msg.topic.schedule.recipients;\nmsg.email.subject = msg.topic.name;\nmsg.method = 'post';\nmsg.sort = 2;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1450,
+        "y": 160,
+        "wires": [
+            [
+                "ae011691916b48c8"
+            ]
+        ]
+    },
+    {
+        "id": "69bf59ac731cee53",
+        "type": "json",
+        "z": "62ee4ea651cd546d",
+        "name": "",
+        "property": "payload",
+        "action": "",
+        "pretty": false,
+        "x": 670,
+        "y": 200,
+        "wires": [
+            [
+                "0a3f51becd20b1fc"
+            ]
+        ]
+    },
+    {
+        "id": "0a3f51becd20b1fc",
+        "type": "function",
+        "z": "62ee4ea651cd546d",
+        "name": "CreateCSV",
+        "func": "//sets up arrays\nconst csv = [];\nvar values = [];\n\n//grabs info for counting and stuff\nvar length = msg.column;\nvar height = msg.row;\nvar lengthAdj = length - 1;\nvar j = 0;\n\n//Creates column headers\ncsv.push(msg.keys)\n\n//organises data into apropriate rows\nfor (let k = 1; k <= height; k++){\n    var l = k - 1;\n    values.push(msg.names[l])\n    for (let i = 1; i <= lengthAdj; i++) {\n        if (msg.payload.responses[j].body.$value){\n            values.push(msg.payload.responses[j].body.$value);\n        } else{\n            values.push(\"NAN\");\n        }\n        j = j + 1\n    }\n    csv.push(values);\n    values = [];  \n}\n\n//sends data to output\nmsg.payload = csv;\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 850,
+        "y": 200,
+        "wires": [
+            [
+                "f1df956a33acbc74"
+            ]
+        ]
+    },
+    {
+        "id": "44b9a05c62492f3e",
+        "type": "function",
+        "z": "62ee4ea651cd546d",
+        "name": "Schedule Output",
+        "func": "//grabing Time and Date from Internet\nvar objDate = new Date();\nvar hours = objDate.getHours();\nvar minutes = objDate.getMinutes();\nvar day = objDate.getDay();\nvar date = objDate.getDate();\nvar month = objDate.getMonth();\n\n//Schedule variables from the JSON file\nconst shortMonths = [3, 5, 8, 10];\nconst sHour = msg.topic.schedule.triggerTime.time.slice(0, msg.topic.schedule.triggerTime.time.length / 2);\nconst sMin = msg.topic.schedule.triggerTime.time.slice(msg.topic.schedule.triggerTime.time.length / 2, msg.topic.schedule.triggerTime.time.length);\nconst iTz = parseFloat(msg.topic.schedule.triggerTime.tz);\nvar zTime = hours + iTz;\nconst iMonth = parseInt(msg.topic.schedule.triggerTime.month);\nconst iDate = parseInt(msg.topic.schedule.triggerTime.date);\nconst iDay = parseInt(msg.topic.schedule.triggerTime.weekday);\nconst iHour = parseInt(sHour, 10);\nconst iMin = parseInt(sMin, 10);\nconst freq = msg.topic.schedule.triggerTime.freq;\n\n//Daily Schedule\nif(freq == \"d\"){\n    if(zTime == iHour && minutes == iMin){\n        msg.payload = true;\n    }\n    else{\n        msg.payload = false;\n    }\n}\n\n//Weekly Schedule\nif(freq == \"w\"){\n    if(day == iDay && zTime == iHour && minutes == iMin){\n        msg.payload = true;\n    }\n    else{\n        msg.payload = false;\n    }\n}\n\n//Monthly Schedule\nif(freq == \"m\"){\n    if(shortMonths.includes(month) && iDate == 31){\n        if(zTime == iHour && minutes == iMin){\n            msg.payload = true;\n        } else {\n            msg.payload = false;\n        }\n    } else if(month == 1 && iDate > 28){\n        if(zTime == iHour && minutes == iMin){\n            msg.payload = true;\n        } else {\n            msg.payload = false;\n        } \n    } else if (date == iDate && zTime == iHour && minutes == iMin){\n        msg.payload = true;\n    } else {\n        msg.payload = false;\n    }\n}\n\n//Yearly Schedule\nif(freq == \"y\"){\n    if(month == iMonth && zTime == iHour && minutes == iMin){\n        msg.payload = true;\n    } else {\n        msg.payload = false;\n    }\n}\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1070,
+        "y": 160,
+        "wires": [
+            [
+                "ac258de9b7f36708"
+            ]
+        ]
+    },
+    {
+        "id": "ac258de9b7f36708",
+        "type": "switch",
+        "z": "62ee4ea651cd546d",
+        "name": "",
+        "property": "payload",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "true"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 1,
+        "x": 1270,
+        "y": 160,
+        "wires": [
+            [
+                "abb40408b0cd0b98"
+            ]
+        ]
+    },
+    {
+        "id": "e38ac97475476465",
+        "type": "http request",
+        "z": "62ee4ea651cd546d",
+        "name": "",
+        "method": "use",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "basic",
+        "senderr": false,
+        "headers": [],
+        "x": 330,
+        "y": 160,
+        "wires": [
+            [
+                "b7be923528c55eb7"
+            ]
+        ]
+    },
+    {
+        "id": "bee26b8223de7afe",
+        "type": "inject",
+        "z": "62ee4ea651cd546d",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "rejectUnauthorized",
+                "v": "false",
+                "vt": "bool"
+            },
+            {
+                "p": "sort",
+                "v": "0",
+                "vt": "num"
+            },
+            {
+                "p": "email.to",
+                "v": "",
+                "vt": "str"
+            },
+            {
+                "p": "email.subject",
+                "v": "",
+                "vt": "str"
+            }
+        ],
+        "repeat": "60",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 330,
+        "y": 80,
+        "wires": [
+            [
+                "82ee37310ae534a5"
+            ]
+        ]
+    },
+    {
+        "id": "38e5c14092bd28e2",
+        "type": "json",
+        "z": "62ee4ea651cd546d",
+        "name": "",
+        "property": "payload",
+        "action": "",
+        "pretty": false,
+        "x": 670,
+        "y": 120,
+        "wires": [
+            [
+                "1d0e07ca18622de0"
+            ]
+        ]
+    },
+    {
+        "id": "1d0e07ca18622de0",
+        "type": "function",
+        "z": "62ee4ea651cd546d",
+        "name": "Report Fetch",
+        "func": "var loop = msg.payload.length;\nconst address = \"\" || env.get('address');\nconst localUser = \"\" || env.get('user');\nconst localPass = \"\" || env.get('password');\nconst credentials = (localUser) + ':' + (localPass);\nconst encodedCred = Buffer.from(credentials).toString(\"base64\");\nmsg.headers = {};\nmsg.headers['authorization'] = 'basic ' + encodedCred;\nmsg.url = address + \"/designer/file/proj/test/reports\";\nmsg.rejectUnauthorized = false;\nlet j = 0;\nfor (let i = 1; i <= loop; i++) {\n    msg.url = address + \"/designer/file/\" + msg.payload[j].path;\n    msg.sort = 1;\n    node.send(msg);\n    j = j + 1;\n}\n\n\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 850,
+        "y": 120,
+        "wires": [
+            [
+                "057e189dec6bbb29"
+            ]
+        ]
+    },
+    {
+        "id": "d0634156dfd3c33a",
+        "type": "json",
+        "z": "62ee4ea651cd546d",
+        "name": "",
+        "property": "payload",
+        "action": "",
+        "pretty": false,
+        "x": 670,
+        "y": 160,
+        "wires": [
+            [
+                "e32ffca182d79105"
+            ]
+        ]
+    },
+    {
+        "id": "e32ffca182d79105",
+        "type": "function",
+        "z": "62ee4ea651cd546d",
+        "name": "topic",
+        "func": "msg.topic = msg.payload;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 830,
+        "y": 160,
+        "wires": [
+            [
+                "44b9a05c62492f3e"
+            ]
+        ]
+    },
+    {
+        "id": "b7be923528c55eb7",
+        "type": "switch",
+        "z": "62ee4ea651cd546d",
+        "name": "",
+        "property": "sort",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "0",
+                "vt": "num"
+            },
+            {
+                "t": "eq",
+                "v": "1",
+                "vt": "num"
+            },
+            {
+                "t": "eq",
+                "v": "2",
+                "vt": "num"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 3,
+        "x": 510,
+        "y": 160,
+        "wires": [
+            [
+                "38e5c14092bd28e2"
+            ],
+            [
+                "d0634156dfd3c33a"
+            ],
+            [
+                "69bf59ac731cee53"
+            ]
+        ]
+    },
+    {
+        "id": "82ee37310ae534a5",
+        "type": "function",
+        "z": "62ee4ea651cd546d",
+        "name": "Report Count",
+        "func": "const address = \"\" || env.get('address');\nconst localUser = \"\" || env.get('user');\nconst localPass = \"\" ||env.get('password');\nconst credentials = (localUser) + ':' + (localPass);\nconst encodedCred = Buffer.from(credentials).toString(\"base64\");\nmsg.headers = {};\nmsg.headers['authorization'] = 'basic ' + encodedCred; \nmsg.url = address + \"/designer/file/proj/test/reports\";\nmsg.method = \"get\";\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 850,
+        "y": 80,
+        "wires": [
+            [
+                "301ce76999650833"
+            ]
+        ]
+    },
+    {
+        "id": "5911bb5b415fdfc4",
+        "type": "link in",
+        "z": "62ee4ea651cd546d",
+        "name": "link in 10",
+        "links": [
+            "ae011691916b48c8"
+        ],
+        "x": 155,
+        "y": 200,
+        "wires": [
+            [
+                "e38ac97475476465"
+            ]
+        ]
+    },
+    {
+        "id": "ae011691916b48c8",
+        "type": "link out",
+        "z": "62ee4ea651cd546d",
+        "name": "link out 10",
+        "mode": "link",
+        "links": [
+            "5911bb5b415fdfc4"
+        ],
+        "x": 1625,
+        "y": 160,
+        "wires": []
+    },
+    {
+        "id": "6af950add9db3e84",
+        "type": "link in",
+        "z": "62ee4ea651cd546d",
+        "name": "link in 12",
+        "links": [
+            "301ce76999650833"
+        ],
+        "x": 155,
+        "y": 120,
+        "wires": [
+            [
+                "e38ac97475476465"
+            ]
+        ]
+    },
+    {
+        "id": "301ce76999650833",
+        "type": "link out",
+        "z": "62ee4ea651cd546d",
+        "name": "link out 11",
+        "mode": "link",
+        "links": [
+            "6af950add9db3e84"
+        ],
+        "x": 995,
+        "y": 80,
+        "wires": []
+    },
+    {
+        "id": "057e189dec6bbb29",
+        "type": "link out",
+        "z": "62ee4ea651cd546d",
+        "name": "link out 13",
+        "mode": "link",
+        "links": [
+            "bb007e2e2081fe8f"
+        ],
+        "x": 995,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "bb007e2e2081fe8f",
+        "type": "link in",
+        "z": "62ee4ea651cd546d",
+        "name": "link in 14",
+        "links": [
+            "057e189dec6bbb29"
+        ],
+        "x": 155,
+        "y": 160,
+        "wires": [
+            [
+                "e38ac97475476465"
+            ]
+        ]
+    },
+    {
+        "id": "12261f0d54d499c2",
+        "type": "subflow:62ee4ea651cd546d",
+        "z": "b93aed0d5c5eb7a2",
+        "name": "ReportToCSV",
+        "env": [
+            {
+                "name": "address",
+                "value": "https://dg.w2202.net",
+                "type": "str"
+            },
+            {
+                "name": "user",
+                "value": "admin",
+                "type": "str"
+            },
+            {
+                "name": "password",
+                "type": "cred"
+            }
+        ],
+        "x": 1270,
+        "y": 740,
+        "wires": [
+            [
+                "60bec77373834d40"
+            ]
+        ]
+    }
+]
